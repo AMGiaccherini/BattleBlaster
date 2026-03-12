@@ -1,67 +1,67 @@
 # Battle Blaster — Learning Log
 
-Progetto realizzato seguendo un corso di Unreal Engine 5. È un top-down shooter in cui il giocatore controlla un carro armato, mira con il mouse e spara proiettili contro torrette nemiche distribuite nei livelli.
+Project built while following an Unreal Engine 5 course. It's a top-down shooter where the player controls a tank, aims with the mouse and fires projectiles at enemy towers spread across the levels.
 
 **Engine:** Unreal Engine 5.6  
-**Linguaggio:** C++ + Blueprint  
-**Moduli UE aggiuntivi:** UMG (UI), EnhancedInput, Niagara
+**Language:** C++ + Blueprint  
+**Additional UE Modules:** UMG (UI), EnhancedInput, Niagara
 
 ---
 
-## Il Gioco
+## The Game
 
-Il giocatore controlla un tank (base + torretta separata). La base si muove con WASD, la torretta ruota seguendo il cursore del mouse. Le torrette nemiche sparano automaticamente quando il tank entra nel loro raggio. Distruggere tutte le torrette carica il livello successivo; morire ricarica il livello corrente.
+The player controls a tank (separate base and turret). The base moves with WASD, the turret rotates following the mouse cursor. Enemy towers shoot automatically when the tank enters their range. Destroying all towers loads the next level; dying reloads the current one.
 
-### Controlli
+### Controls
 
-| Input | Azione |
+| Input | Action |
 |---|---|
-| W / S | Avanza / Arretra |
-| A / D | Ruota il tank |
-| Mouse | Mira la torretta |
-| Click Sinistro | Spara |
+| W / S | Move forward / backward |
+| A / D | Rotate the tank |
+| Mouse | Aim the turret |
+| Left Click | Shoot |
 
 ---
 
-## Architettura delle Classi
+## Class Architecture
 
 ```
 APawn
-└── ABasePawn         ← logica condivisa (mesh, torretta, sparo, morte)
-    ├── ATank         ← controllato dal giocatore, input + camera
-    └── ATower        ← nemico AI, spara a intervalli con Timer
+└── ABasePawn         ← shared logic (mesh, turret, shooting, death)
+    ├── ATank         ← player-controlled, input + camera
+    └── ATower        ← AI enemy, shoots at intervals using a Timer
 
 AActor
-└── AProjectile       ← proiettile con movimento, collisioni, effetti
+└── AProjectile       ← projectile with movement, collisions, effects
 
 UActorComponent
-└── UHealthComponent  ← gestisce HP e delega la morte al GameMode
+└── UHealthComponent  ← manages HP and delegates death to the GameMode
 
 UGameModeBase
-└── ABattleBlasterGameMode  ← arbitro centrale: countdown, win/lose, livelli
+└── ABattleBlasterGameMode  ← central referee: countdown, win/lose, levels
 
 UGameInstance
-└── UBattleBlasterGameInstance  ← persiste tra i livelli, gestisce la navigazione
+└── UBattleBlasterGameInstance  ← persists across levels, handles navigation
 
 UUserWidget
-└── UScreenMessage    ← widget HUD con testo dinamico (countdown, vittoria, sconfitta)
+└── UScreenMessage    ← HUD widget with dynamic text (countdown, victory, defeat)
 ```
 
 ---
 
-## Concetti Appresi
+## Concepts Learned
 
-### Ereditarietà e classe base condivisa (BasePawn)
+### Inheritance and Shared Base Class (BasePawn)
 
-`ABasePawn` contiene tutto ciò che Tank e Tower hanno in comune: le mesh (base + torretta), il punto di spawn del proiettile, la logica di rotazione della torretta (`RotateTurret`) e la logica di morte con effetti. Tank e Tower ereditano da BasePawn e aggiungono solo il comportamento specifico. Questo è il pattern fondamentale dell'ereditarietà applicato a UE5.
+`ABasePawn` contains everything Tank and Tower have in common: the meshes (base + turret), the projectile spawn point, the turret rotation logic (`RotateTurret`) and the death logic with effects. Tank and Tower inherit from BasePawn and only add their specific behavior. This is the fundamental inheritance pattern applied to UE5.
 
 ### Enhanced Input System
 
-Il Tank usa il nuovo sistema di input di UE5 (`EnhancedInputComponent`) al posto del legacy. In `BeginPlay` viene registrato un `InputMappingContext` sull'`EnhancedInputLocalPlayerSubsystem`. Le azioni sono oggetti `UInputAction` bindati tramite `BindAction` con eventi tipizzati (`ETriggerEvent::Triggered`, `ETriggerEvent::Started`). Questo sistema è più flessibile del legacy perché separa la definizione dell'input dalla sua logica.
+The Tank uses UE5's new input system (`EnhancedInputComponent`) instead of the legacy one. In `BeginPlay` an `InputMappingContext` is registered on the `EnhancedInputLocalPlayerSubsystem`. Actions are `UInputAction` objects bound via `BindAction` with typed events (`ETriggerEvent::Triggered`, `ETriggerEvent::Started`). This system is more flexible than the legacy one because it separates input definition from its logic.
 
-### Rotazione fluida con RInterpTo
+### Smooth Rotation with RInterpTo
 
-La torretta non scatta istantaneamente sul bersaglio ma usa `FMath::RInterpTo` per interpolare la rotazione ogni frame. Il risultato è un movimento fluido. Il parametro `10.0f` è la velocità di interpolazione: più alto, più scattante.
+The turret doesn't snap instantly to the target but uses `FMath::RInterpTo` to interpolate the rotation every frame, resulting in smooth movement. The `10.0f` parameter is the interpolation speed: the higher the value, the snappier the rotation.
 
 ```cpp
 FRotator InterpolatedRotation = FMath::RInterpTo(
@@ -72,50 +72,50 @@ FRotator InterpolatedRotation = FMath::RInterpTo(
 );
 ```
 
-### Proiettile con ProjectileMovementComponent
+### Projectile with ProjectileMovementComponent
 
-`AProjectile` usa `UProjectileMovementComponent` per gestire il movimento fisico senza scrivere logica manuale. Basta impostare `InitialSpeed` e `MaxSpeed` nel costruttore e il componente si occupa di tutto. La collisione è gestita dal delegate `OnComponentHit` bindato dinamicamente con `AddDynamic` in `BeginPlay`.
+`AProjectile` uses `UProjectileMovementComponent` to handle physical movement without writing manual logic. Just setting `InitialSpeed` and `MaxSpeed` in the constructor is enough — the component handles the rest. Collision is managed by the `OnComponentHit` delegate dynamically bound with `AddDynamic` in `BeginPlay`.
 
-### Damage System di UE
+### UE Damage System
 
-Il progetto usa il sistema di danno built-in di UE. Il proiettile chiama `UGameplayStatics::ApplyDamage` sull'attore colpito. `UHealthComponent` si registra sul delegate `OnTakeAnyDamage` dell'owner tramite `AddDynamic` in `BeginPlay`, e scala gli HP di conseguenza. Quando gli HP arrivano a zero, notifica il GameMode tramite `ActorDied`.
+The project uses UE's built-in damage system. The projectile calls `UGameplayStatics::ApplyDamage` on the hit actor. `UHealthComponent` registers on the owner's `OnTakeAnyDamage` delegate via `AddDynamic` in `BeginPlay` and scales HP accordingly. When HP reaches zero, it notifies the GameMode via `ActorDied`.
 
-### GameMode come arbitro centrale
+### GameMode as Central Referee
 
-`ABattleBlasterGameMode` è il punto di controllo dell'intera sessione di gioco:
-- In `BeginPlay` trova tutte le torrette con `GetAllActorsOfClass` e assegna a ciascuna il riferimento al Tank
-- Gestisce il countdown iniziale con un `FTimerHandle` ripetuto
-- Riceve la notifica di morte degli attori tramite `ActorDied` e decide se è vittoria o sconfitta
-- Dopo il game over, delega la navigazione alla GameInstance
+`ABattleBlasterGameMode` is the control point for the entire game session:
+- In `BeginPlay` it finds all towers with `GetAllActorsOfClass` and assigns each one a reference to the Tank
+- It manages the initial countdown with a repeating `FTimerHandle`
+- It receives actor death notifications via `ActorDied` and decides victory or defeat
+- After game over, it delegates navigation to the GameInstance
 
-### GameInstance per la persistenza tra livelli
+### GameInstance for Level Persistence
 
-`UBattleBlasterGameInstance` sopravvive al cambio di livello (a differenza del GameMode che viene distrutto ad ogni load). Tiene traccia di `CurrentLevelIndex` e `LastLevelIndex` e gestisce `LoadNextLevel`, `RestartCurrentLevel` e `RestartGame`. La navigazione avviene tramite `UGameplayStatics::OpenLevel` con nomi costruiti dinamicamente (`Level_1`, `Level_2`, ecc.).
+`UBattleBlasterGameInstance` survives level changes (unlike the GameMode which is destroyed on every load). It tracks `CurrentLevelIndex` and `LastLevelIndex` and handles `LoadNextLevel`, `RestartCurrentLevel` and `RestartGame`. Navigation happens via `UGameplayStatics::OpenLevel` with dynamically built names (`Level_1`, `Level_2`, etc.).
 
-### Timer con FTimerHandle
+### Timers with FTimerHandle
 
-Usati in due contesti diversi nel progetto:
-- In `ATower::BeginPlay`: timer ripetuto (`true`) per chiamare `CheckFireCondition` ogni `FireRate` secondi
-- In `ABattleBlasterGameMode`: timer ripetuto per il countdown, timer one-shot (`false`) per il delay post game over
+Used in two different contexts in the project:
+- In `ATower::BeginPlay`: repeating timer (`true`) to call `CheckFireCondition` every `FireRate` seconds
+- In `ABattleBlasterGameMode`: repeating timer for the countdown, one-shot timer (`false`) for the post game over delay
 
 ```cpp
-// Timer ripetuto — la Torre controlla la condizione di fuoco ogni FireRate secondi
+// Repeating timer — the Tower checks the fire condition every FireRate seconds
 GetWorldTimerManager().SetTimer(FireTimerHandle, this, &ATower::CheckFireCondition, FireRate, true);
 ```
 
 ### UMG Widget in C++
 
-`UScreenMessage` estende `UUserWidget` e usa `meta = (BindWidget)` per collegare automaticamente un `UTextBlock` definito nel Blueprint del widget. Il metodo `SetMessageText` converte una `FString` in `FText` (il tipo corretto per la UI in UE) e aggiorna il testo a runtime. Il widget viene creato dal GameMode con `CreateWidget` e aggiunto allo schermo con `AddToPlayerScreen`.
+`UScreenMessage` extends `UUserWidget` and uses `meta = (BindWidget)` to automatically bind a `UTextBlock` defined in the widget Blueprint. The `SetMessageText` method converts an `FString` to `FText` (the correct type for UE UI) and updates the text at runtime. The widget is created by the GameMode with `CreateWidget` and added to the screen with `AddToPlayerScreen`.
 
 ### Camera Shake
 
-Sia l'impatto del proiettile (`HitCameraShakeClass` in Projectile) che la morte di un attore (`DeathCameraShakeClass` in BasePawn) triggerano un camera shake tramite `PlayerController->ClientStartCameraShake`. Il tipo di shake è una sottoclasse di `UCameraShakeBase` configurabile dal Blueprint senza toccare il C++.
+Both the projectile impact (`HitCameraShakeClass` in Projectile) and actor death (`DeathCameraShakeClass` in BasePawn) trigger a camera shake via `PlayerController->ClientStartCameraShake`. The shake type is a subclass of `UCameraShakeBase` configurable from Blueprint without touching C++.
 
 ---
 
-## Asset
+## Assets
 
-| Categoria | File |
+| Category | Files |
 |---|---|
 | Meshes | SM_TankBase, SM_TankTurret, SM_TowerBase, SM_TowerTurret, SM_Projectile, SM_Sphere |
 | Effects (Niagara) | P_ProjectileTrail, P_HitEffect, P_DeathEffect |
